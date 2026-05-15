@@ -1,23 +1,37 @@
 <script lang="ts" setup>
 const messages = ref<{ text: string; owned: boolean }[]>([])
 const message = ref('')
+const isTyping = ref(false)
 
 const { status, data, send, open, close, ws } = useWebSocket('/ws/chat', {
   immediate: false,
   async onMessage(ws, event) {
-    // We parse the message from the event
-    // The message might be a string or a Blob
-    const messageText = typeof event.data === 'string' ? event.data : await event.data.text()
-    messages.value.push({ text: messageText, owned: false })
+    // convert the json data
+    
+    const messageData = typeof event.data === 'string' ? JSON.parse(event.data) : JSON.parse(await event.data.text())
+    if (messageData.type === 'message') {
+      messages.value.push({ text: messageData.text, owned: false })
+      isTyping.value = messageData.isTyping
+    } else if (messageData.type === 'typing') {
+      isTyping.value = messageData.isTyping
+    }
   },
 })
 
 function sendMessage() {
   if (message.value.trim() !== '') {
     messages.value.push({ text: `${message.value}`, owned: true })
-    send(message.value)
+    send(
+      JSON.stringify({ type: 'message', text: message.value, isTyping: false })
+    )
     message.value = ''
   }
+}
+
+function setTyping(isTyping: boolean) {
+  send(
+    JSON.stringify({ type: 'typing', isTyping })
+  )
 }
 
 onMounted(() => {
@@ -29,11 +43,12 @@ onMounted(() => {
   <div>
     <h1>Chat</h1>
     <form @submit.prevent="sendMessage">
-      <input v-model="message" placeholder="Type a message..." />
+      <input v-model="message" @input="setTyping(true)" @blur="setTyping(false)" placeholder="Type a message..." />
       <button type="submit">Send</button>
     </form>
     <ul>
       <li class="message" v-for="(message, index) in messages" :key="index" :class="{ owned: message.owned }">{{ message.text }}</li>
+      <li class="message" v-if="isTyping">...</li>
     </ul>
   </div>
 </template>
