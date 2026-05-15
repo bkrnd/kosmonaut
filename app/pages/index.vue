@@ -5,5 +5,6 @@
 <template>
   <div>
     <Visitors />
+    <Chat />
   </div>
 </template>
