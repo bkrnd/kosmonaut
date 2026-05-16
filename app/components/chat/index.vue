@@ -140,7 +140,6 @@ onUnmounted(() => { close() })
         </template>
         <template v-else-if="entry.type === 'user_left' || entry.type === 'user_joined'">
           <span 
-            v-if="entry.userId && (index === 0 || timeline[index - 1]?.userId !== entry.userId)"
             :class="entry.userId === myUserId ? 'owned' : ''"
             :style="{ color: getColorFromUserId(entry.userId) }"
           >
