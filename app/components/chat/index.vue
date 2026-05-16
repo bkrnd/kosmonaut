@@ -108,7 +108,7 @@ watch(whoIsTyping, () => {
 
 <template>
   <div>
-    <h1>Chat</h1>
+    <p>Chat</p>
     <ul class="messages" ref="container">
       <li v-for="(message, index) in messages" :key="index">
         <span 
@@ -148,6 +148,7 @@ watch(whoIsTyping, () => {
 <style scoped>
 div {
   height: 100%;
+  width: 100%;
   display: flex;
   gap: 1em;
   flex-direction: column;
