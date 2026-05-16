@@ -1,66 +1,75 @@
 <script lang="ts" setup>
 import { useIsTyping } from '@/composables/useIsTyping'
-const mySenderId = ref<string>('')
-const messages = ref<{ text: string; senderId?: string; type?: 'message' | 'connection'; }[]>([])
-const message = ref('')
+
+
 const { isTyping, setTyping, clearTyping } = useIsTyping(3000)
-const whoIsTyping = ref('')
+
+const timeline = ref<TimelineEntry[]>([])
+let myUserId: UserId = ''
+const messageInput = ref('')
+
 const showNewMessageNotification = ref(false)
+
+// List of user that are typing, in correct order (first is the oldest)
+const whoIsTyping = ref(new Set<UserId>())
+const whoIsTypingArray = computed(() => Array.from(whoIsTyping.value))
 
 const { send, open, close } = useWebSocket('/ws/chat', {
   immediate: false,
   async onMessage(ws, event) {
-    const messageData = typeof event.data === 'string' ? JSON.parse(event.data) : JSON.parse(await event.data.text())
-    if (messageData.type === 'message') {
-      messages.value.push({ text: messageData.text, senderId: messageData.senderId, type: messageData.type })
-      whoIsTyping.value = messageData.isTyping ? messageData.senderId : ''
-    } else if (messageData.type === 'typing') {
-      whoIsTyping.value = messageData.isTyping ? messageData.senderId : ''
-    } else if (messageData.type === 'history') {
-      messages.value = messageData.messages.map((msg: { text: string; senderId: string }) => ({
-        text: msg.text,
-        senderId: msg.senderId,
-        type: msg.type || 'message',
-      }))
-    } else if (messageData.type === 'welcome') {
-      mySenderId.value = messageData.senderId
-    } else if (messageData.type === 'connection') {
-      messages.value.push({ text: messageData.text, senderId: messageData.senderId, type: messageData.type })
+    const data: ServerEvent = typeof event.data === 'string' ? JSON.parse(event.data) : JSON.parse(await event.data.text())
+
+    switch (data.type) {
+      case 'welcome':
+        myUserId = data.userId
+        break
+      case 'timeline':
+        timeline.value.push(...data.entries)
+        break
+      case 'entry_created':
+        timeline.value.push(data.entry)
+        break
+      case 'typing':
+        data.isTyping ?
+          whoIsTyping.value.add(data.userId)
+          :
+          whoIsTyping.value.delete(data.userId)
+        break
     }
   },
 })
 
+function sendEvent(send: (data: string) => void, event: ClientEvent) {
+  send(JSON.stringify(event))
+}
+
 function sendMessage() {
-  if (message.value.trim() !== '') {
-    messages.value.push({ text: `${message.value}`, senderId: mySenderId.value })
-    send(
-      JSON.stringify({ type: 'message', text: message.value, isTyping: false })
-    )
+  if (messageInput.value.trim() !== '') {
+    sendEvent(send, { type: 'send_message', text: messageInput.value })
     clearTyping()
-    message.value = ''
+    messageInput.value = ''
   }
 }
 
 watch(isTyping, (newValue) => {
-  send(JSON.stringify({ type: 'typing', isTyping: newValue }))
+  sendEvent(send, { type: 'typing', isTyping: newValue })
 })
 
-onMounted(() => { open() })
-onUnmounted(() => { close() })
 
-function getHumanReadableSenderId(senderId: string) {
-  if (senderId === mySenderId.value) {
+
+function getHumanReadableUserId(userId: string) {
+  if (userId === myUserId) {
     return 'You'
   }
-  return senderId.slice(0, 6)
+  return userId.slice(0, 6)
 }
 
-function getColorFromSenderId(senderId: string) {
-  if (senderId === mySenderId.value) {
+function getColorFromUserId(userId: string) {
+  if (userId === myUserId) {
     return '#555555'
   }
   let hash = 0
-  senderId.split('').forEach(char => {
+  userId.split('').forEach(char => {
     hash = char.charCodeAt(0) + ((hash << 5) - hash)
   })
   let colour = '#'
@@ -94,52 +103,68 @@ watch(() => arrivedState.bottom, (atBottom) => {
   }
 })
 
-watch(messages, () => {
+watch(timeline, () => {
   stickToBottomIfNeeded()
   if (!isAtBottom()) {
     showNewMessageNotification.value = true
   }
 }, { deep: true })
 
-watch(whoIsTyping, () => {
+watch(whoIsTypingArray, () => {
   stickToBottomIfNeeded()
 })
+
+onMounted(() => { open() })
+onUnmounted(() => { close() })
 </script>
 
 <template>
   <div>
     <p>Chat</p>
     <ul class="messages" ref="container">
-      <li v-for="(message, index) in messages" :key="index">
-        <span 
-          v-if="message.senderId && (index === 0 || messages[index - 1].senderId !== message.senderId)"
-          :class="message.senderId === mySenderId ? 'owned' : ''"
-          :style="{ color: getColorFromSenderId(message.senderId) }"
-        >
-          {{ getHumanReadableSenderId(message.senderId) }}
-        </span>
-        <p 
-          class="message" :class="{ owned: message.senderId === mySenderId }"
-          :style="{ backgroundColor: getColorFromSenderId(message.senderId) + '30' }"
-        >
-          {{ message.text }}
-        </p>
+      <li v-for="(entry, index) in timeline" :key="entry.id">
+        <template v-if="entry.type === 'message'">
+          <span 
+            v-if="entry.userId && (index === 0 || timeline[index - 1]?.userId !== entry.userId)"
+            :class="entry.userId === myUserId ? 'owned' : ''"
+            :style="{ color: getColorFromUserId(entry.userId) }"
+          >
+            {{ getHumanReadableUserId(entry.userId) }}
+          </span>
+          <p 
+            class="message" :class="{ owned: entry.userId === myUserId }"
+            :style="{ backgroundColor: getColorFromUserId(entry.userId) + '30' }"
+          >
+            {{ entry.text }}
+          </p>
+        </template>
+        <template v-else-if="entry.type === 'user_left' || entry.type === 'user_joined'">
+          <span 
+            v-if="entry.userId && (index === 0 || timeline[index - 1]?.userId !== entry.userId)"
+            :class="entry.userId === myUserId ? 'owned' : ''"
+            :style="{ color: getColorFromUserId(entry.userId) }"
+          >
+            {{ getHumanReadableUserId(entry.userId) }} {{ entry.type === 'user_joined' ? 'joined' : 'left' }} the chat
+          </span>
+        </template>
       </li>
-      <li v-if="whoIsTyping && whoIsTyping !== mySenderId">
-        <span
-          v-if="messages.length === 0 || whoIsTyping !== messages[messages.length - 1].senderId"
-          :style="{ color: getColorFromSenderId(whoIsTyping) }"
-        >
-          {{ getHumanReadableSenderId(whoIsTyping) }}
-        </span>
-        <p class="message" :style="{ backgroundColor: getColorFromSenderId(whoIsTyping) + '50' }">...</p>
-      </li>
+      <template v-if="whoIsTyping.size > 0">
+        <li v-for="userId in whoIsTypingArray" :key="userId">
+          <span
+            v-if="timeline.length === 0 || (timeline[timeline.length - 1]?.userId !== userId)"
+            :style="{ color: getColorFromUserId(userId) }"
+          >
+            {{ getHumanReadableUserId(userId) }}
+          </span>
+          <p class="message" :style="{ backgroundColor: getColorFromUserId(userId) + '50' }">...</p>
+        </li>
+      </template>
     </ul>
     <form @submit.prevent="sendMessage">
       <div v-if="showNewMessageNotification" class="new-message-notification">
         New message!
       </div>
-      <input v-model="message" @input="setTyping(message)" placeholder="Type a message..." />
+      <input v-model="messageInput" @input="setTyping(messageInput)" placeholder="Type a message..." />
       <button type="submit">Send</button>
     </form>
   </div>

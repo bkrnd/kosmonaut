@@ -1,53 +1,63 @@
-interface ChatMessage {
-  type?: 'message' | 'connection'
-  timestamp: Date;
-  senderId: string;
-  text: string;
-}
+const timeline: TimelineEntry[] = []
 
-const chatHistory: ChatMessage[] = []
-
-function addMessageToHistory(senderId: string, text: string) {
-  const message: ChatMessage = {
+function addMessageEntry(userId: UserId, text: string): TimelineEntry {
+  const entry: MessageEntry = {
+    id: crypto.randomUUID(),
+    createdAt: new Date(),
     type: 'message',
-    timestamp: new Date(),
-    senderId,
+    userId,
     text,
   }
-  chatHistory.push(message)
+  timeline.push(entry)
+
+  return entry
 }
 
-function addConnectionMessage(senderId: string, isConnected: boolean) {
-  const message: ChatMessage = {
-    type: 'connection',
-    timestamp: new Date(),
-    senderId,
-    text: isConnected ? 'joined the chat' : 'left the chat',
+function addConnectionEntry(userId: UserId, connectionType: 'user_joined' | 'user_left'): TimelineEntry {
+  const entry: UserJoinedEntry | UserLeftEntry = {
+    id: crypto.randomUUID(),
+    createdAt: new Date(),
+    type: connectionType,
+    userId,
   }
-  chatHistory.push(message)
+  timeline.push(entry)
+  return entry
+}
+
+function sendEvent(peer: any, event: ServerEvent) {
+  peer.send(JSON.stringify(event))
+}
+
+function publishEvent(peer: any, event: ServerEvent) {
+  peer.publish('chat', JSON.stringify(event))
 }
 
 export default defineWebSocketHandler({
   open(peer) {
     peer.subscribe('chat')
     console.log(peer.id, 'connected')
-    addConnectionMessage(peer.id, true)
-    peer.send(JSON.stringify({ type: 'welcome', senderId: peer.id }))
-    peer.send(JSON.stringify({ type: 'history', messages: chatHistory }))
-    peer.publish('chat', JSON.stringify({ type: 'connection', senderId: peer.id, text: 'joined the chat' }))
+    const entry = addConnectionEntry(peer.id, 'user_joined')
+    sendEvent(peer, { type: 'welcome', userId: peer.id })
+    sendEvent(peer, { type: 'timeline', entries: timeline })
+    publishEvent(peer, { type: 'entry_created', entry })
   },
   message(peer, message) {
-    const data = JSON.parse(message.toString())
-    if (data.type === 'message' && typeof data.text === 'string' && data.text.trim() !== '') {
-      addMessageToHistory(peer.id, data.text.trim())
-      peer.publish('chat', JSON.stringify({ type: 'message', text: data.text.trim(), isTyping: false, senderId: peer.id }))
+    console.log(peer.id, 'sent message', message.toString())
+    const data  = <ClientEvent>JSON.parse(message.toString())
+    if (data.type === 'send_message' && typeof data.text === 'string' && data.text.trim() !== '') {
+      const entry = addMessageEntry(peer.id, data.text.trim())
+      sendEvent(peer, { type: 'entry_created', entry })
+      publishEvent(peer, { type: 'entry_created', entry })
     } else if (data.type === 'typing' && typeof data.isTyping === 'boolean') {
-      peer.publish('chat', JSON.stringify({ type: 'typing', isTyping: data.isTyping, senderId: peer.id }))
+      publishEvent(peer, { type: 'typing', isTyping: data.isTyping, userId: peer.id })
     }
   },
   close(peer) {
-    addConnectionMessage(peer.id, false)
-    peer.publish('chat', JSON.stringify({ type: 'connection', senderId: peer.id, text: 'left the chat' }))
+    console.log(peer.id, 'disconnected')
+    const entry = addConnectionEntry(peer.id, 'user_left')
+    console.table(entry)
+    sendEvent(peer, { type: 'entry_created', entry })
+    publishEvent(peer, { type: 'entry_created', entry })
     peer.unsubscribe('chat')
   },
 })
