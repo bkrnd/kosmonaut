@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { useIsTyping } from '@/composables/useIsTyping'
 const mySenderId = ref<string>('')
-const messages = ref<{ text: string; senderId?: string }[]>([])
+const messages = ref<{ text: string; senderId?: string; type?: 'message' | 'connection'; }[]>([])
 const message = ref('')
 const { isTyping, setTyping, clearTyping } = useIsTyping(3000)
 const whoIsTyping = ref('')
@@ -12,7 +12,7 @@ const { send, open, close } = useWebSocket('/ws/chat', {
   async onMessage(ws, event) {
     const messageData = typeof event.data === 'string' ? JSON.parse(event.data) : JSON.parse(await event.data.text())
     if (messageData.type === 'message') {
-      messages.value.push({ text: messageData.text, senderId: messageData.senderId })
+      messages.value.push({ text: messageData.text, senderId: messageData.senderId, type: messageData.type })
       whoIsTyping.value = messageData.isTyping ? messageData.senderId : ''
     } else if (messageData.type === 'typing') {
       whoIsTyping.value = messageData.isTyping ? messageData.senderId : ''
@@ -20,9 +20,12 @@ const { send, open, close } = useWebSocket('/ws/chat', {
       messages.value = messageData.messages.map((msg: { text: string; senderId: string }) => ({
         text: msg.text,
         senderId: msg.senderId,
+        type: msg.type || 'message',
       }))
     } else if (messageData.type === 'welcome') {
       mySenderId.value = messageData.senderId
+    } else if (messageData.type === 'connection') {
+      messages.value.push({ text: messageData.text, senderId: messageData.senderId, type: messageData.type })
     }
   },
 })

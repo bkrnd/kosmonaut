@@ -1,4 +1,5 @@
 interface ChatMessage {
+  type?: 'message' | 'connection'
   timestamp: Date;
   senderId: string;
   text: string;
@@ -8,9 +9,20 @@ const chatHistory: ChatMessage[] = []
 
 function addMessageToHistory(senderId: string, text: string) {
   const message: ChatMessage = {
+    type: 'message',
     timestamp: new Date(),
     senderId,
     text,
+  }
+  chatHistory.push(message)
+}
+
+function addConnectionMessage(senderId: string, isConnected: boolean) {
+  const message: ChatMessage = {
+    type: 'connection',
+    timestamp: new Date(),
+    senderId,
+    text: isConnected ? 'joined the chat' : 'left the chat',
   }
   chatHistory.push(message)
 }
@@ -19,8 +31,10 @@ export default defineWebSocketHandler({
   open(peer) {
     peer.subscribe('chat')
     console.log(peer.id, 'connected')
+    addConnectionMessage(peer.id, true)
     peer.send(JSON.stringify({ type: 'welcome', senderId: peer.id }))
     peer.send(JSON.stringify({ type: 'history', messages: chatHistory }))
+    peer.publish('chat', JSON.stringify({ type: 'connection', senderId: peer.id, text: 'joined the chat' }))
   },
   message(peer, message) {
     const data = JSON.parse(message.toString())
@@ -32,6 +46,8 @@ export default defineWebSocketHandler({
     }
   },
   close(peer) {
+    addConnectionMessage(peer.id, false)
+    peer.publish('chat', JSON.stringify({ type: 'connection', senderId: peer.id, text: 'left the chat' }))
     peer.unsubscribe('chat')
   },
 })
