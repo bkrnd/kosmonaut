@@ -163,7 +163,7 @@ onUnmounted(() => { close() })
       <div v-if="showNewMessageNotification" class="new-message-notification">
         New message!
       </div>
-      <input v-model="messageInput" @input="setTyping(messageInput)" placeholder="Type a message..." />
+      <input v-model="messageInput" @input="setTyping(messageInput)" maxlength="2000" placeholder="Type a message..." />
       <button type="submit">Send</button>
     </form>
   </div>
