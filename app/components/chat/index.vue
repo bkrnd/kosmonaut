@@ -171,6 +171,7 @@ onUnmounted(() => { close() })
 
 <style scoped>
 div {
+  background-color: #f9f9f9;
   height: 100%;
   width: 100%;
   display: flex;
