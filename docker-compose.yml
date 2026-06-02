@@ -1,0 +1,17 @@
+services:
+  nuxt-app:
+    build: .
+    ports: []  # disable direct port binding
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kosmonaut.rule=Host(`${APP_HOST}`)"
+      - "traefik.http.services.kosmonaut.loadbalancer.server.port=3000"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - web_proxy_network
+    restart: unless-stopped
+
+networks:
+  web_proxy_network:
+    external: true
