@@ -55,29 +55,11 @@ watch(isTyping, (newValue) => {
   sendEvent(send, { type: 'typing', isTyping: newValue })
 })
 
-
-
 function getHumanReadableUserId(userId: string) {
   if (userId === myUserId) {
     return 'You'
   }
   return userId.slice(0, 6)
-}
-
-function getColorFromUserId(userId: string) {
-  if (userId === myUserId) {
-    return '#555555'
-  }
-  let hash = 0
-  userId.split('').forEach(char => {
-    hash = char.charCodeAt(0) + ((hash << 5) - hash)
-  })
-  let colour = '#'
-  for (let i = 0; i < 3; i++) {
-    const value = (hash >> (i * 8)) & 0xff
-    colour += value.toString(16).padStart(2, '0')
-  }
-  return colour
 }
 
 const container = ref<HTMLUListElement | null>(null)
@@ -126,22 +108,19 @@ onUnmounted(() => { close() })
         <template v-if="entry.type === 'message'">
           <span 
             v-if="entry.userId && (index === 0 || timeline[index - 1]?.userId !== entry.userId)"
-            :class="entry.userId === myUserId ? 'owned' : ''"
-            :style="{ color: getColorFromUserId(entry.userId) }"
+            :class="entry.userId === myUserId ? 'text-primary' : 'text-foreground'"
           >
             {{ getHumanReadableUserId(entry.userId) }}
           </span>
           <p 
-            class="message" :class="{ owned: entry.userId === myUserId }"
-            :style="{ backgroundColor: getColorFromUserId(entry.userId) + '30' }"
+            class="message" :class="{ 'text-primary': entry.userId === myUserId }"
           >
             {{ entry.text }}
           </p>
         </template>
         <template v-else-if="entry.type === 'user_left' || entry.type === 'user_joined'">
           <span 
-            :class="entry.userId === myUserId ? 'owned' : ''"
-            :style="{ color: getColorFromUserId(entry.userId) }"
+            :class="entry.userId === myUserId ? 'text-primary' : 'text-secondary'"
           >
             {{ getHumanReadableUserId(entry.userId) }} {{ entry.type === 'user_joined' ? 'joined' : 'left' }} the chat
           </span>
@@ -151,11 +130,10 @@ onUnmounted(() => { close() })
         <li v-for="userId in whoIsTypingArray" :key="userId">
           <span
             v-if="timeline.length === 0 || (timeline[timeline.length - 1]?.userId !== userId)"
-            :style="{ color: getColorFromUserId(userId) }"
           >
             {{ getHumanReadableUserId(userId) }}
           </span>
-          <p class="message" :style="{ backgroundColor: getColorFromUserId(userId) + '50' }">...</p>
+          <p class="message" :class="userId === myUserId ? 'text-primary' : 'text-secondary'">...</p>
         </li>
       </template>
     </ul>
