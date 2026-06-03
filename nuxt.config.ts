@@ -1,4 +1,4 @@
-// https://nuxt.com/docs/api/configuration/nuxt-config
+import tailwindcss from "@tailwindcss/vite";
 
 const isDev = process.env.NODE_ENV !== 'production'
 
@@ -51,5 +51,11 @@ export default defineNuxtConfig({
   },
   future: {
     compatibilityVersion: 4
+  },
+  css: ['./app/assets/css/main.css'],
+  vite: {
+    plugins: [
+      tailwindcss(),
+    ],
   },
 })
